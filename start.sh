@@ -17,7 +17,7 @@ if [ $SHORT_URL ]; then
 fi
 
 if [ $SITE_NAME ]; then
-  sed -i "s#Subconverter Web#$SITE_NAME#g" /usr/share/nginx/html/conf/config.js
+  sed -i "s#CoverWeb#$SITE_NAME#g" /usr/share/nginx/html/conf/config.js
 fi
 
 nginx -g "daemon off;"

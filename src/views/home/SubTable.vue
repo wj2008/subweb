@@ -88,8 +88,22 @@
                 <div class="col-12 col-md-2">
                   <button type="button" class="btn btn-success" @click="getSubUrl()">转换</button>
                 </div>
-                <div class="col-12 col-md-10">
-                  <input class="form-control" placeholder="点击获取短链" v-model.trim="result.shortUrl" />
+                <!-- 新增：key 输入 + 随机 -->
+                <div class="col-6 col-md-4">
+                  <input
+                    id="key6"
+                    class="form-control"
+                    v-model.trim="shortKey"
+                    maxlength="6"
+                    placeholder="6位短链key（可随机）"
+                  />
+                </div>
+                <div class="col-6 col-md-2">
+                  <button type="button" class="btn btn-secondary" @click="genKey()">随机</button>
+                </div>
+
+                <div class="col-12 col-md-4">
+                  <input class="form-control" placeholder="点击获取短链（短信链接）" v-model.trim="result.shortUrl" />
                 </div>
                 <div class="col-12 col-md-2">
                   <button type="button" class="btn btn-primary" @click="getShortUrl()">短链</button>
@@ -147,6 +161,7 @@ export default {
       shortUrl: process.env.VUE_APP_SHORT_URL || window.config.shortUrl,
       remoteConfigName: process.env.VUE_APP_REMOTE_CONFIG_NAME || window.config.remoteConfigName,
       remoteConfigUrl: process.env.VUE_APP_REMOTE_CONFIG_URL || window.config.remoteConfigUrl,
+      shortPassword: process.env.VUE_APP_SHORT_PASSWORD || window.config.shortPassword,
       moreConfig: this.DEFAULT_MORECONFIG,
       isShowMoreConfig: false,
       isShowManualApiUrl: false,
@@ -155,6 +170,7 @@ export default {
         subUrl: '',
         shortUrl: '',
       },
+      shortKey: '',
       urls: [],
       api: process.env.VUE_APP_API_URL || window.config.apiUrl,
       target: 'clash',
@@ -202,6 +218,35 @@ export default {
         this.$showDialog('warning', '注意', '复制失败，请检查浏览器兼容性');
       }
     },
+    validKey6(key) {
+      const chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
+      if (!key || key.length !== 6) return false;
+      for (let i = 0; i < key.length; i++) {
+        if (!chars.includes(key[i])) return false;
+      }
+      return true;
+    },
+    genKey(len) {
+      len = len || 6;
+      const chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
+      const maxPos = chars.length;
+      let result = '';
+      for (let i = 0; i < len; i++) {
+        result += chars.charAt(Math.floor(Math.random() * maxPos));
+      }
+      this.shortKey = result;
+    },
+    async ensureKey() {
+      if (!this.shortKey) {
+        this.genKey();
+        return true;
+      }
+      if (!this.validKey6(this.shortKey)) {
+        this.$showDialog('warning', '注意', 'Key 必须是6位，且只能包含指定字符集（不含 o0OIl 等易混字符）');
+        return false;
+      }
+      return true;
+    },
     getConverter() {
       if (this.urls == '') {
         this.$showDialog('warning', '注意', '请输入订阅链接或节点');
@@ -239,20 +284,25 @@ export default {
       if (!this.getConverter()) {
         return;
       }
-      let data = new FormData();
-      data.append('longUrl', btoa(this.result.subUrl));
+      if (!this.ensureKey()) return;
+      if (!this.shortPassword) {
+        this.$showDialog('warning', '注意', '未配置短链生成密码');
+        return;
+      }
+      let data = { key: this.shortKey, url: this.result.subUrl, cmd: 'add', password: this.shortPassword };
+
       showLoading();
       request({
         method: 'post',
-        url: this.shortUrl + '/short',
+        url: this.shortUrl,
         header: {
-          'Content-Type': 'application/form-data; charset=utf-8',
+          'Content-Type': 'application/json; charset=utf-8',
         },
-        data: data,
+        data,
       })
         .then((res) => {
-          if (res.data.Code === 1 && res.data.ShortUrl !== '') {
-            this.result.shortUrl = res.data.ShortUrl;
+          if (res.data.status === 200 && res.data.key !== '') {
+            this.result.shortUrl = this.shortUrl + '/' + res.data.key;
             this.toCopy(this.result.shortUrl, '短链接');
           }
           hideLoading();
